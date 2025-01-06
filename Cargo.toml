@@ -1,0 +1,8 @@
+[package]
+name = "gw2_map_logger"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+gw2_mumble = { git = "https://github.com/zerthox/gw2-mumble-rs", features = ["json"] }
+chrono = "0.4"
