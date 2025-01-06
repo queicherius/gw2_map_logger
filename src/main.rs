@@ -1,4 +1,4 @@
-use chrono::Local;
+use chrono::Utc;
 use gw2_mumble::MumbleLink;
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -20,13 +20,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let link = MumbleLink::new()?;
     let map_names = MapNames::new();
     let mut last_map_id = None;
-    let mut last_change_time = Local::now().timestamp_millis();
+    let mut last_change_time = Utc::now().timestamp_millis();
     let mut last_tick = 0u32;
 
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)
-        .open("changes.txt")?;
+        .open("changes.tsv")?;
 
     println!("Started monitoring map changes...");
 
@@ -42,26 +42,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         if last_map_id != Some(current_map_id) {
-            let current_time = Local::now().timestamp_millis();
-            let duration_ms = current_time - last_change_time;
-            let map_name = map_names.get(current_map_id);
+            let current_time = Utc::now().timestamp_millis();
 
-            let log_entry = format!("{},{}\n", current_time, map_name);
+            if last_map_id.is_some() {
+                let current_time_fmt = Utc::now().format("%Y-%m-%d %H:%M:%S");
+                let map_name = map_names.get(last_map_id.unwrap());
+                let duration_ms = current_time - last_change_time;
 
-            file.write_all(log_entry.as_bytes())?;
-            file.flush()?;
+                let log_entry = format!(
+                    "{}\t{}\t{}\n",
+                    current_time_fmt,
+                    map_name,
+                    format_duration(duration_ms)
+                );
 
-            if duration_ms > 100 {
-                println!("Time spent since last change: {}", format_duration(duration_ms));
+                if duration_ms > 500 {
+                    println!("{}", log_entry.trim());
+
+                    file.write_all(log_entry.as_bytes())?;
+                    file.flush()?;
+                }
             }
-
-            println!("Change detected: {}", log_entry.trim());
 
             last_map_id = Some(current_map_id);
             last_change_time = current_time;
         }
 
         last_tick = current_tick;
-        thread::sleep(Duration::from_millis(200));
+        thread::sleep(Duration::from_millis(100));
     }
 }
