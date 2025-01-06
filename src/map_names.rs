@@ -8,6 +8,9 @@ impl MapNames {
     pub fn new() -> Self {
         let mut map_names = HashMap::new();
 
+        // Loading Screen
+        map_names.insert(0, "Loading Screen");
+
         // Lobbies
         map_names.insert(1206, "Mistlock Sanctuary");
         map_names.insert(872, "Mistlock Observatory");

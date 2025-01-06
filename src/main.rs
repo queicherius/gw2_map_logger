@@ -21,6 +21,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let map_names = MapNames::new();
     let mut last_map_id = None;
     let mut last_change_time = Local::now().timestamp_millis();
+    let mut last_tick = 0u32;
 
     let mut file = OpenOptions::new()
         .create(true)
@@ -30,32 +31,37 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Started monitoring map changes...");
 
     loop {
-        if let Ok(identity) = link.parse_identity() {
-            let current_map_id = identity.map_id;
-
-            if last_map_id != Some(current_map_id) {
-                let current_time = Local::now().timestamp_millis();
-                let duration_ms = current_time - last_change_time;
-                let map_name = map_names.get(current_map_id);
-
-                let log_entry = format!("{},{}\n", current_time, map_name);
-
-                file.write_all(log_entry.as_bytes())?;
-                file.flush()?;
-
-                if duration_ms > 100 {
-                    println!("Time spent in map: {}", format_duration(duration_ms));
-                }
-
-                println!("Map change detected: {}", log_entry.trim());
-
-                last_map_id = Some(current_map_id);
-                last_change_time = current_time;
-            }
+        let current_tick = link.read_ui_tick();
+        let current_map_id = if current_tick == last_tick {
+            0 // Loading screen
+        } else if let Ok(identity) = link.parse_identity() {
+            identity.map_id
         } else {
-            println!("Failed to parse identity data");
+            println!("Failed to get current map id");
+            continue;
+        };
+
+        if last_map_id != Some(current_map_id) {
+            let current_time = Local::now().timestamp_millis();
+            let duration_ms = current_time - last_change_time;
+            let map_name = map_names.get(current_map_id);
+
+            let log_entry = format!("{},{}\n", current_time, map_name);
+
+            file.write_all(log_entry.as_bytes())?;
+            file.flush()?;
+
+            if duration_ms > 100 {
+                println!("Time spent since last change: {}", format_duration(duration_ms));
+            }
+
+            println!("Change detected: {}", log_entry.trim());
+
+            last_map_id = Some(current_map_id);
+            last_change_time = current_time;
         }
 
+        last_tick = current_tick;
         thread::sleep(Duration::from_millis(200));
     }
 }
