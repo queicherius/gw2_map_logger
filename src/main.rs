@@ -1,27 +1,12 @@
 use chrono::Local;
-use csv::ReaderBuilder;
 use gw2_mumble::MumbleLink;
-use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::thread;
 use std::time::Duration;
 
-fn load_map_names() -> Result<HashMap<u32, String>, Box<dyn std::error::Error>> {
-    let mut map_names = HashMap::new();
-    let mut rdr = ReaderBuilder::new().from_path("map_names.csv")?;
-
-    for result in rdr.records() {
-        let record = result?;
-        if let (Some(id_str), Some(name)) = (record.get(0), record.get(1)) {
-            if let Ok(id) = id_str.parse::<u32>() {
-                map_names.insert(id, name.to_string());
-            }
-        }
-    }
-
-    Ok(map_names)
-}
+mod map_names;
+use map_names::MapNames;
 
 fn format_duration(duration_ms: i64) -> String {
     let duration_secs = duration_ms / 1000;
@@ -33,7 +18,7 @@ fn format_duration(duration_ms: i64) -> String {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let link = MumbleLink::new()?;
-    let map_names = load_map_names()?;
+    let map_names = MapNames::new();
     let mut last_map_id = None;
     let mut last_change_time = Local::now().timestamp_millis();
 
@@ -51,20 +36,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if last_map_id != Some(current_map_id) {
                 let current_time = Local::now().timestamp_millis();
                 let duration_ms = current_time - last_change_time;
-
-                let map_name_fallback = format!("UNKNOWN[{}]", current_map_id);
-
-                let map_name = map_names
-                    .get(&current_map_id)
-                    .map(|name| name.as_str())
-                    .unwrap_or(&map_name_fallback);
+                let map_name = map_names.get(current_map_id);
 
                 let log_entry = format!("{},{}\n", current_time, map_name);
 
                 file.write_all(log_entry.as_bytes())?;
                 file.flush()?;
 
-                println!("Time spent in map: {}", format_duration(duration_ms));
+                if duration_ms > 100 {
+                    println!("Time spent in map: {}", format_duration(duration_ms));
+                }
+
                 println!("Map change detected: {}", log_entry.trim());
 
                 last_map_id = Some(current_map_id);
